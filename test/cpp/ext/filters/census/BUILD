@@ -29,6 +29,7 @@ grpc_cc_test(
         "opencensus-stats-test",
     ],
     language = "C++",
+    tags = ["no_windows"],  # TODO(jtattermusch): fix test on windows
     deps = [
         "//:grpc++",
         "//:grpc_opencensus_plugin",

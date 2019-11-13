@@ -124,6 +124,9 @@ class ThreadManager {
     WorkerThread(ThreadManager* thd_mgr);
     ~WorkerThread();
 
+    bool created() const { return created_; }
+    void Start() { thd_.Start(); }
+
    private:
     // Calls thd_mgr_->MainWorkLoop() and once that completes, calls
     // thd_mgr_>MarkAsCompleted(this) to mark the thread as completed
@@ -131,6 +134,7 @@ class ThreadManager {
 
     ThreadManager* const thd_mgr_;
     grpc_core::Thread thd_;
+    bool created_;
   };
 
   // The main function in ThreadManager
@@ -150,7 +154,7 @@ class ThreadManager {
   //
   // Note: The user of this ThreadManager object must create grpc_resource_quota
   // object (that contains the actual max thread quota) and a grpc_resource_user
-  // object through which quota is requested whenver new threads need to be
+  // object through which quota is requested whenever new threads need to be
   // created
   grpc_resource_user* resource_user_;
 

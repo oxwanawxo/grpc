@@ -69,8 +69,8 @@ class CallbackWithStatusTag
     : public grpc_experimental_completion_queue_functor {
  public:
   // always allocated against a call arena, no memory free required
-  static void operator delete(void* ptr, std::size_t size) {
-    assert(size == sizeof(CallbackWithStatusTag));
+  static void operator delete(void* /*ptr*/, std::size_t size) {
+    GPR_CODEGEN_ASSERT(size == sizeof(CallbackWithStatusTag));
   }
 
   // This operator should never be called as the memory should be freed as part
@@ -78,7 +78,7 @@ class CallbackWithStatusTag
   // delete to the operator new so that some compilers will not complain (see
   // https://github.com/grpc/grpc/issues/11301) Note at the time of adding this
   // there are no tests catching the compiler warning.
-  static void operator delete(void*, void*) { assert(0); }
+  static void operator delete(void*, void*) { GPR_CODEGEN_ASSERT(false); }
 
   CallbackWithStatusTag(grpc_call* call, std::function<void(Status)> f,
                         CompletionQueueTag* ops)
@@ -133,8 +133,8 @@ class CallbackWithSuccessTag
     : public grpc_experimental_completion_queue_functor {
  public:
   // always allocated against a call arena, no memory free required
-  static void operator delete(void* ptr, std::size_t size) {
-    assert(size == sizeof(CallbackWithSuccessTag));
+  static void operator delete(void* /*ptr*/, std::size_t size) {
+    GPR_CODEGEN_ASSERT(size == sizeof(CallbackWithSuccessTag));
   }
 
   // This operator should never be called as the memory should be freed as part
@@ -142,7 +142,7 @@ class CallbackWithSuccessTag
   // delete to the operator new so that some compilers will not complain (see
   // https://github.com/grpc/grpc/issues/11301) Note at the time of adding this
   // there are no tests catching the compiler warning.
-  static void operator delete(void*, void*) { assert(0); }
+  static void operator delete(void*, void*) { GPR_CODEGEN_ASSERT(false); }
 
   CallbackWithSuccessTag() : call_(nullptr) {}
 
@@ -201,9 +201,11 @@ class CallbackWithSuccessTag
     void* ignored = ops_;
     // Allow a "false" return value from FinalizeResult to silence the
     // callback, just as it silences a CQ tag in the async cases
+#ifndef NDEBUG
     auto* ops = ops_;
+#endif
     bool do_callback = ops_->FinalizeResult(&ignored, &ok);
-    GPR_CODEGEN_ASSERT(ignored == ops);
+    GPR_CODEGEN_DEBUG_ASSERT(ignored == ops);
 
     if (do_callback) {
       CatchingCallback(func_, ok);

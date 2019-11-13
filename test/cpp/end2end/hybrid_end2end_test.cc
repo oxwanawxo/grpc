@@ -28,6 +28,7 @@
 #include <grpcpp/server_builder.h>
 #include <grpcpp/server_context.h>
 
+#include "src/core/lib/gpr/env.h"
 #include "src/core/lib/iomgr/iomgr.h"
 #include "src/proto/grpc/testing/duplicate/echo_duplicate.grpc.pb.h"
 #include "src/proto/grpc/testing/echo.grpc.pb.h"
@@ -79,7 +80,7 @@ void HandleEcho(Service* service, ServerCompletionQueue* cq, bool dup_service) {
 // that the req/resp are ByteBuffers
 template <class Service>
 void HandleRawEcho(Service* service, ServerCompletionQueue* cq,
-                   bool dup_service) {
+                   bool /*dup_service*/) {
   ServerContext srv_ctx;
   GenericServerAsyncResponseWriter response_writer(&srv_ctx);
   ByteBuffer recv_buffer;
@@ -218,7 +219,7 @@ void HandleGenericCall(AsyncGenericService* service,
 class TestServiceImplDupPkg
     : public ::grpc::testing::duplicate::EchoTestService::Service {
  public:
-  Status Echo(ServerContext* context, const EchoRequest* request,
+  Status Echo(ServerContext* /*context*/, const EchoRequest* request,
               EchoResponse* response) override {
     response->set_message(request->message() + "_dup");
     return Status::OK;
@@ -228,6 +229,13 @@ class TestServiceImplDupPkg
 class HybridEnd2endTest : public ::testing::TestWithParam<bool> {
  protected:
   HybridEnd2endTest() {}
+
+  static void SetUpTestCase() {
+#if TARGET_OS_IPHONE
+    // Workaround Apple CFStream bug
+    gpr_setenv("grpc_cfstream", "0");
+#endif
+  }
 
   void SetUp() override {
     inproc_ = (::testing::UnitTest::GetInstance()
@@ -558,7 +566,7 @@ class StreamedUnaryDupPkg
           TestServiceImplDupPkg> {
  public:
   Status StreamedEcho(
-      ServerContext* context,
+      ServerContext* /*context*/,
       ServerUnaryStreamer<EchoRequest, EchoResponse>* stream) override {
     EchoRequest req;
     EchoResponse resp;
@@ -596,7 +604,7 @@ class FullyStreamedUnaryDupPkg
     : public duplicate::EchoTestService::StreamedUnaryService {
  public:
   Status StreamedEcho(
-      ServerContext* context,
+      ServerContext* /*context*/,
       ServerUnaryStreamer<EchoRequest, EchoResponse>* stream) override {
     EchoRequest req;
     EchoResponse resp;
@@ -635,7 +643,7 @@ class SplitResponseStreamDupPkg
           WithSplitStreamingMethod_ResponseStream<TestServiceImplDupPkg> {
  public:
   Status StreamedResponseStream(
-      ServerContext* context,
+      ServerContext* /*context*/,
       ServerSplitStreamer<EchoRequest, EchoResponse>* stream) override {
     EchoRequest req;
     EchoResponse resp;
@@ -675,7 +683,7 @@ class FullySplitStreamedDupPkg
     : public duplicate::EchoTestService::SplitStreamedService {
  public:
   Status StreamedResponseStream(
-      ServerContext* context,
+      ServerContext* /*context*/,
       ServerSplitStreamer<EchoRequest, EchoResponse>* stream) override {
     EchoRequest req;
     EchoResponse resp;
@@ -714,7 +722,7 @@ TEST_F(HybridEnd2endTest,
 class FullyStreamedDupPkg : public duplicate::EchoTestService::StreamedService {
  public:
   Status StreamedEcho(
-      ServerContext* context,
+      ServerContext* /*context*/,
       ServerUnaryStreamer<EchoRequest, EchoResponse>* stream) override {
     EchoRequest req;
     EchoResponse resp;
@@ -727,7 +735,7 @@ class FullyStreamedDupPkg : public duplicate::EchoTestService::StreamedService {
     return Status::OK;
   }
   Status StreamedResponseStream(
-      ServerContext* context,
+      ServerContext* /*context*/,
       ServerSplitStreamer<EchoRequest, EchoResponse>* stream) override {
     EchoRequest req;
     EchoResponse resp;
@@ -954,8 +962,8 @@ TEST_F(HybridEnd2endTest, GenericMethodWithoutGenericService) {
   EXPECT_EQ(nullptr, server_.get());
 }
 
-INSTANTIATE_TEST_CASE_P(HybridEnd2endTest, HybridEnd2endTest,
-                        ::testing::Bool());
+INSTANTIATE_TEST_SUITE_P(HybridEnd2endTest, HybridEnd2endTest,
+                         ::testing::Bool());
 
 }  // namespace
 }  // namespace testing

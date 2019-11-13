@@ -111,15 +111,14 @@ static void on_handshake_done(void* arg, grpc_error* error) {
     } else {
       error = GRPC_ERROR_REF(error);
     }
-    memset(c->result, 0, sizeof(*c->result));
+    c->result->reset();
   } else {
     grpc_endpoint_delete_from_pollset_set(args->endpoint,
                                           c->args.interested_parties);
     c->result->transport =
         grpc_create_chttp2_transport(args->args, args->endpoint, true);
-    grpc_core::RefCountedPtr<grpc_core::channelz::SocketNode> socket_node =
+    c->result->socket =
         grpc_chttp2_transport_get_socket_node(c->result->transport);
-    c->result->socket_uuid = socket_node == nullptr ? 0 : socket_node->uuid();
     GPR_ASSERT(c->result->transport);
     // TODO(roth): We ideally want to wait until we receive HTTP/2
     // settings from the server before we consider the connection
@@ -151,7 +150,7 @@ static void on_handshake_done(void* arg, grpc_error* error) {
   }
   grpc_closure* notify = c->notify;
   c->notify = nullptr;
-  GRPC_CLOSURE_SCHED(notify, error);
+  grpc_core::ExecCtx::Run(DEBUG_LOCATION, notify, error);
   c->handshake_mgr.reset();
   gpr_mu_unlock(&c->mu);
   chttp2_connector_unref(reinterpret_cast<grpc_connector*>(c));
@@ -180,10 +179,10 @@ static void connected(void* arg, grpc_error* error) {
     } else {
       error = GRPC_ERROR_REF(error);
     }
-    memset(c->result, 0, sizeof(*c->result));
+    c->result->reset();
     grpc_closure* notify = c->notify;
     c->notify = nullptr;
-    GRPC_CLOSURE_SCHED(notify, error);
+    grpc_core::ExecCtx::Run(DEBUG_LOCATION, notify, error);
     if (c->endpoint != nullptr) {
       grpc_endpoint_shutdown(c->endpoint, GRPC_ERROR_REF(error));
     }

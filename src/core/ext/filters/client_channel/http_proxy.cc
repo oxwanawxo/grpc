@@ -47,10 +47,12 @@ static char* get_http_proxy_server(char** user_cred) {
   char* proxy_name = nullptr;
   char** authority_strs = nullptr;
   size_t authority_nstrs;
-  /* Prefer using 'https_proxy'. Fallback on 'http_proxy' if it is not set. The
+  /* Prefer using 'grpc_proxy'. Fallback on 'http_proxy' if it is not set.
+   * Also prefer using 'https_proxy' with fallback on 'http_proxy'. The
    * fallback behavior can be removed if there's a demand for it.
    */
-  char* uri_str = gpr_getenv("https_proxy");
+  char* uri_str = gpr_getenv("grpc_proxy");
+  if (uri_str == nullptr) uri_str = gpr_getenv("https_proxy");
   if (uri_str == nullptr) uri_str = gpr_getenv("http_proxy");
   if (uri_str == nullptr) return nullptr;
   grpc_uri* uri = grpc_uri_parse(uri_str, false /* suppress_errors */);
@@ -97,7 +99,7 @@ bool http_proxy_enabled(const grpc_channel_args* args) {
   return grpc_channel_arg_get_bool(arg, true);
 }
 
-static bool proxy_mapper_map_name(grpc_proxy_mapper* mapper,
+static bool proxy_mapper_map_name(grpc_proxy_mapper* /*mapper*/,
                                   const char* server_uri,
                                   const grpc_channel_args* args,
                                   char** name_to_resolve,
@@ -122,7 +124,9 @@ static bool proxy_mapper_map_name(grpc_proxy_mapper* mapper,
             server_uri);
     goto no_use_proxy;
   }
-  no_proxy_str = gpr_getenv("no_proxy");
+  /* Prefer using 'no_grpc_proxy'. Fallback on 'no_proxy' if it is not set. */
+  no_proxy_str = gpr_getenv("no_grpc_proxy");
+  if (no_proxy_str == nullptr) no_proxy_str = gpr_getenv("no_proxy");
   if (no_proxy_str != nullptr) {
     static const char* NO_PROXY_SEPARATOR = ",";
     bool use_proxy = true;
@@ -191,15 +195,15 @@ no_use_proxy:
   return false;
 }
 
-static bool proxy_mapper_map_address(grpc_proxy_mapper* mapper,
-                                     const grpc_resolved_address* address,
-                                     const grpc_channel_args* args,
-                                     grpc_resolved_address** new_address,
-                                     grpc_channel_args** new_args) {
+static bool proxy_mapper_map_address(grpc_proxy_mapper* /*mapper*/,
+                                     const grpc_resolved_address* /*address*/,
+                                     const grpc_channel_args* /*args*/,
+                                     grpc_resolved_address** /*new_address*/,
+                                     grpc_channel_args** /*new_args*/) {
   return false;
 }
 
-static void proxy_mapper_destroy(grpc_proxy_mapper* mapper) {}
+static void proxy_mapper_destroy(grpc_proxy_mapper* /*mapper*/) {}
 
 static const grpc_proxy_mapper_vtable proxy_mapper_vtable = {
     proxy_mapper_map_name, proxy_mapper_map_address, proxy_mapper_destroy};

@@ -39,8 +39,8 @@ class DefaultGlobalClientCallbacks final
     : public ClientContext::GlobalCallbacks {
  public:
   ~DefaultGlobalClientCallbacks() override {}
-  void DefaultConstructor(ClientContext* context) override {}
-  void Destructor(ClientContext* context) override {}
+  void DefaultConstructor(ClientContext* /*context*/) override {}
+  void Destructor(ClientContext* /*context*/) override {}
 };
 
 static grpc::internal::GrpcLibraryInitializer g_gli_initializer;
@@ -70,6 +70,22 @@ ClientContext::~ClientContext() {
     grpc_call_unref(call_);
   }
   g_client_callbacks->Destructor(this);
+}
+
+void ClientContext::set_credentials(
+    const std::shared_ptr<grpc_impl::CallCredentials>& creds) {
+  creds_ = creds;
+  // If call_ is set, we have already created the call, and set the call
+  // credentials. This should only be done before we have started the batch
+  // for sending initial metadata.
+  if (creds_ != nullptr && call_ != nullptr) {
+    if (!creds_->ApplyToCall(call_)) {
+      SendCancelToInterceptors();
+      grpc_call_cancel_with_status(call_, GRPC_STATUS_CANCELLED,
+                                   "Failed to set credentials to rpc.",
+                                   nullptr);
+    }
+  }
 }
 
 std::unique_ptr<ClientContext> ClientContext::FromServerContext(

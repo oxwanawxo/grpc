@@ -35,7 +35,7 @@
 #include "src/core/lib/gprpp/thd.h"
 #include "src/core/lib/security/credentials/credentials.h"
 #include "src/core/lib/security/credentials/tls/grpc_tls_credentials_options.h"
-#include "src/core/lib/security/security_connector/ssl_utils.h"
+#include "src/core/lib/security/security_connector/ssl_utils_config.h"
 #include "test/core/end2end/data/ssl_test_data.h"
 #include "test/core/util/port.h"
 #include "test/core/util/test_config.h"
@@ -53,11 +53,10 @@ struct fullstack_secure_fixture_data {
 };
 
 static grpc_end2end_test_fixture chttp2_create_fixture_secure_fullstack(
-    grpc_channel_args* client_args, grpc_channel_args* server_args) {
+    grpc_channel_args* /*client_args*/, grpc_channel_args* /*server_args*/) {
   grpc_end2end_test_fixture f;
   int port = grpc_pick_unused_port_or_die();
-  fullstack_secure_fixture_data* ffd =
-      grpc_core::New<fullstack_secure_fixture_data>();
+  fullstack_secure_fixture_data* ffd = new fullstack_secure_fixture_data();
   memset(&f, 0, sizeof(f));
   grpc_core::JoinHostPort(&ffd->localaddr, "localhost", port);
   f.fixture_data = ffd;
@@ -66,8 +65,9 @@ static grpc_end2end_test_fixture chttp2_create_fixture_secure_fullstack(
   return f;
 }
 
-static void process_auth_failure(void* state, grpc_auth_context* ctx,
-                                 const grpc_metadata* md, size_t md_count,
+static void process_auth_failure(void* state, grpc_auth_context* /*ctx*/,
+                                 const grpc_metadata* /*md*/,
+                                 size_t /*md_count*/,
                                  grpc_process_auth_metadata_done_cb cb,
                                  void* user_data) {
   GPR_ASSERT(state == nullptr);
@@ -104,7 +104,7 @@ static void chttp2_init_server_secure_fullstack(
 void chttp2_tear_down_secure_fullstack(grpc_end2end_test_fixture* f) {
   fullstack_secure_fixture_data* ffd =
       static_cast<fullstack_secure_fixture_data*>(f->fixture_data);
-  grpc_core::Delete(ffd);
+  delete ffd;
 }
 
 // Application-provided callback for server authorization check.
@@ -136,8 +136,12 @@ static int server_authz_check_async(
 // Synchronous implementation of schedule field in
 // grpc_tls_credential_reload_config instance that is a part of client-side
 // grpc_tls_credentials_options instance.
-static int client_cred_reload_sync(void* config_user_data,
+static int client_cred_reload_sync(void* /*config_user_data*/,
                                    grpc_tls_credential_reload_arg* arg) {
+  if (!arg->key_materials_config->pem_key_cert_pair_list().empty()) {
+    arg->status = GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_UNCHANGED;
+    return 0;
+  }
   grpc_ssl_pem_key_cert_pair** key_cert_pair =
       static_cast<grpc_ssl_pem_key_cert_pair**>(
           gpr_zalloc(sizeof(grpc_ssl_pem_key_cert_pair*)));
@@ -158,8 +162,12 @@ static int client_cred_reload_sync(void* config_user_data,
 // Synchronous implementation of schedule field in
 // grpc_tls_credential_reload_config instance that is a part of server-side
 // grpc_tls_credentials_options instance.
-static int server_cred_reload_sync(void* config_user_data,
+static int server_cred_reload_sync(void* /*config_user_data*/,
                                    grpc_tls_credential_reload_arg* arg) {
+  if (!arg->key_materials_config->pem_key_cert_pair_list().empty()) {
+    arg->status = GRPC_SSL_CERTIFICATE_CONFIG_RELOAD_UNCHANGED;
+    return 0;
+  }
   grpc_ssl_pem_key_cert_pair** key_cert_pair =
       static_cast<grpc_ssl_pem_key_cert_pair**>(
           gpr_zalloc(sizeof(grpc_ssl_pem_key_cert_pair*)));
